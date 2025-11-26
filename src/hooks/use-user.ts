@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import userService from "@/services/user.service";
-import { User } from "@clerk/nextjs/server";
 
 export const useUser = (userId: string) => {
   const { isLoaded, getToken } = useAuth();

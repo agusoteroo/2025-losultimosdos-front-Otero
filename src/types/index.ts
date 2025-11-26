@@ -39,6 +39,7 @@ export interface Routine {
   duration: number;
   icon: string;
   users: string[];
+  sedeId: number;
 }
 
 export interface MuscleGroup {
@@ -60,7 +61,7 @@ export interface RoutineExercise {
   exerciseId: number;
   sets?: number;
   reps?: number;
-  restTime?: number; // in seconds
+  restTime?: number;
 }
 
 export interface Sede {
@@ -92,4 +93,61 @@ export interface Goal {
   targetRoutine?: Routine;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export type LeaderboardPeriod = "all" | "30d" | "7d";
+
+export interface UserLeaderboardItem {
+  rank: number;
+  userId: string;
+  totalPoints: number;
+  user?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    fullName: string;
+  };
+}
+
+export interface SedeLeaderboardItem {
+  rank: number;
+  sedeId: number;
+  sedeName: string;
+  totalPoints: number;
+}
+
+export type BadgeMetric =
+  | "TOTAL_POINTS"
+  | "CLASS_ENROLL_COUNT"
+  | "ROUTINE_COMPLETE_COUNT";
+
+export interface UserBadgeStatus {
+  badgeId: number;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  metric: BadgeMetric;
+  threshold: number;
+  currentValue: number;
+  progress: number; // 0–1
+  earned: boolean;
+  earnedAt: string | null;
+}
+
+export type ChallengeFrequency = "DAILY" | "WEEKLY";
+
+export interface Challenge {
+  id: number;
+  title: string;
+  description?: string | null;
+  frequency: ChallengeFrequency;
+  pointsReward: number;
+  minLevel: number;
+  sedeId?: number | null;
+  isActive: boolean;
+  createdAt: string; // Date serializado
+  updatedAt: string;
+  currentLevel: number; // viene del back
+  isCompleted: boolean; // viene del back
 }

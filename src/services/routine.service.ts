@@ -1,13 +1,27 @@
-import { Routine, RoutineExercise } from "@/types";
+import { Routine, RoutineExercise, Exercise } from "@/types";
 import apiService from "./api.service";
 
+export type BestPerformance = {
+  exerciseId: number;
+  weight: number;
+  reps: number;
+};
+export type RoutineCompleteResponse = {
+  ok: boolean;
+  pointsAwarded: number;
+  completionRatio: number;
+  completedCount: number;
+  totalExercises: number;
+};
 
 class RoutineService {
   private readonly apiService = apiService;
+
   async getAllRoutines(sedeId: number) {
     const data = await this.apiService.get(`/routines?sedeId=${sedeId}`);
     return data.items as (Routine & { exercises: RoutineExercise[] })[];
   }
+
   async getRoutinesUsersCount(sedeId: number) {
     const data = await this.apiService.get(
       `/routines/users-count?sedeId=${sedeId}`
@@ -44,8 +58,6 @@ class RoutineService {
       restTime: exercise.restTime,
     }));
 
-    console.log("transformedExercises", transformedExercises);
-
     const data = await this.apiService.post(
       "/admin/routines",
       { ...routine, exercises: transformedExercises },
@@ -59,7 +71,11 @@ class RoutineService {
       throw new Error("No authentication token available");
     }
     const data = await this.apiService.get(`/routines/${id}`, token);
-    return data as Routine & { exercises: RoutineExercise[] };
+
+    // el back devuelve Routine + exercises con exercise anidado
+    return data as Routine & {
+      exercises: (RoutineExercise & { exercise?: Exercise })[];
+    };
   }
 
   async deleteRoutine(id: number, token: string | null) {
@@ -118,7 +134,41 @@ class RoutineService {
       throw new Error("No authentication token available");
     }
     const data = await this.apiService.get(`/user/routines`, token);
-    return data.routines as (Routine & { exercises: RoutineExercise[] })[];
+    return data.routines as (Routine & {
+      exercises: RoutineExercise[];
+    })[];
+  }
+
+  async getBestPerformances(
+    routineId: number,
+    token: string | null
+  ): Promise<BestPerformance[]> {
+    if (!token) {
+      throw new Error("No authentication token available");
+    }
+    const data = await this.apiService.get(
+      `/user/routines/${routineId}/best-performances`,
+      token
+    );
+    return (data.items ?? []) as BestPerformance[];
+  }
+
+  async completeRoutine(
+    routineId: number,
+    performances: { exerciseId: number; weight: number; reps: number }[],
+    token: string | null
+  ): Promise<RoutineCompleteResponse> {
+    if (!token) {
+      throw new Error("No authentication token available");
+    }
+
+    const data = await this.apiService.post(
+      `/user/routines/${routineId}/complete`,
+      { performances },
+      token
+    );
+
+    return data as RoutineCompleteResponse;
   }
 
   private transformExercises(exercises: RoutineExercise[]) {

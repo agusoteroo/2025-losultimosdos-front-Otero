@@ -71,6 +71,7 @@ const EditRoutinePage = () => {
           duration: values.duration,
           icon: values.icon,
           users: [],
+          sedeId: values.sedeId,
         },
         values.exercises.map((exercise) => ({
           id: exercise.exerciseData.id,
@@ -96,6 +97,7 @@ const EditRoutinePage = () => {
         level: newRoutine.level,
         duration: newRoutine.duration,
         icon: newRoutine.icon,
+        sedeId: newRoutine.sedeId,
         exercises: newRoutine.exercises.map((exercise) => ({
           exerciseId: exercise.exerciseData.id,
           sets: exercise.sets,

@@ -27,19 +27,27 @@ import { Sede } from "@/types";
 import { Skeleton } from "./ui/skeleton";
 import { SedeForm, SedeFormValues } from "./forms/sede";
 import toast from "react-hot-toast";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
+import { useUser } from "@/hooks/use-user";
 
 export function SedesSwitcher({ isAdmin }: { isAdmin: boolean }) {
   const { selectedSede, setSelectedSede } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { getToken } = useAuth();
+  const { userId } = useAuth();
+  const { user } = useClerk();
   const queryClient = useQueryClient();
-
   const { data: sedes, isLoading } = useQuery({
     queryKey: ["sedes"],
+    enabled: !!userId,
     queryFn: async () => {
       const data = await apiService.get("/sedes");
+      setSelectedSede(
+        data.sedes.find(
+          (sede: Sede) => sede.id === Number(user?.publicMetadata.sede)
+        )
+      );
       return data.sedes as Sede[];
     },
   });

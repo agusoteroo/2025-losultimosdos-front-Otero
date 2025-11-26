@@ -6,12 +6,15 @@ import { FullClasses } from "@/components/classes/full-classes";
 import { useStore } from "@/store/useStore";
 import { useQuery } from "@tanstack/react-query";
 import TableSkeleton from "@/components/skeletons/table-skeleton";
-import { DataTable } from "@/components/ui/data-table";
-import { columns } from "@/components/classes/columns";
 
 const UserPage = () => {
   const { selectedSede } = useStore();
-  const { data: classes, isLoading } = useQuery({
+
+  const {
+    data: classes,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["classes", selectedSede.id],
     queryFn: async () => {
       const response = await apiService.get(
@@ -26,23 +29,29 @@ const UserPage = () => {
   }
 
   if (!classes) {
-    return <DataTable data={[]} columns={columns} />;
+    return (
+      <div className="container mx-auto space-y-4 p-4">
+        <h1 className="text-lg font-bold">Clases Disponibles</h1>
+        <UsersClassesTable classes={[]} onClassesChanged={refetch} />
+      </div>
+    );
   }
+
+  const available = classes.filter((c) => c.users.length < c.capacity);
+  const full = classes.filter((c) => c.users.length >= c.capacity);
+
   return (
     <div className="container mx-auto space-y-4 p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-lg font-bold">Clases Disponibles</h1>
       </div>
+
       <UsersClassesTable
-        classes={classes.filter((c) => c.users.length < c.capacity) || []}
+        classes={available}
+        onClassesChanged={refetch}
       />
-      {classes.filter((c) => c.users.length >= c.capacity).length > 0 && (
-        <FullClasses
-          fullClasses={
-            classes.filter((c) => c.users.length >= c.capacity) || []
-          }
-        />
-      )}
+
+      {full.length > 0 && <FullClasses fullClasses={full} />}
     </div>
   );
 };

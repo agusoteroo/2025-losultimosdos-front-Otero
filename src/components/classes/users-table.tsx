@@ -9,15 +9,26 @@ import { ClerkLoaded, ClerkLoading, useAuth } from "@clerk/nextjs";
 import apiService from "@/services/api.service";
 import { toast } from "react-hot-toast";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Skeleton } from "../ui/skeleton";
-// import { Enrollment } from "@/types";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useStore } from "@/store/useStore";
+import { useEvaluateChallenges } from "@/hooks/use-evaluate-challenge"; 
 
-const UsersActionColumn = ({ row }: { row: Row<GymClass> }) => {
+const UsersActionColumn = ({
+  row,
+  onClassesChanged,
+}: {
+  row: Row<GymClass>;
+  onClassesChanged?: () => void;
+}) => {
   const { userId, getToken } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
+  const queryClient = useQueryClient();
+  const { selectedSede } = useStore();
+  const { mutate: evaluateChallenges } = useEvaluateChallenges(); 
 
   useEffect(() => {
     if (userId) {
@@ -31,21 +42,55 @@ const UsersActionColumn = ({ row }: { row: Row<GymClass> }) => {
       const token = await getToken();
       await apiService.post(
         enrolled ? "/user/unenroll" : "/user/enroll",
-        {
-          classId,
-        },
+        { classId },
         token!
       );
+
+      const wasEnrolled = enrolled;
       setEnrolled(!enrolled);
+
       toast.success(
         enrolled
           ? "Inscripción cancelada con éxito"
           : "Inscripción realizada con éxito",
         { id: "enroll-class" }
       );
+
+      // refresca la lista de clases vía React Query (refetch en page.tsx)
+      onClassesChanged?.();
+
+      // refresca progreso gamificado (leaderboards "all" y "30d")
+      queryClient.invalidateQueries({
+        queryKey: [
+          "leaderboard-users",
+          { period: "all", sedeId: selectedSede.id },
+        ],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "leaderboard-users",
+          { period: "30d", sedeId: selectedSede.id },
+        ],
+      });
+
+      // refresca los badges del usuario
+      if (userId) {
+        queryClient.invalidateQueries({
+          queryKey: ["userBadges", userId],
+        });
+      }
+
+      // 🔥 si el usuario se ACABA de inscribir (antes no lo estaba),
+      // evaluamos desafíos. Si se completa alguno, el propio hook
+      // useEvaluateChallenges muestra el toast y refresca gamificación.
+      if (!wasEnrolled) {
+        evaluateChallenges();
+      }
+
+      // por si lo usás en server components
       router.refresh();
     } catch (error: any) {
-      if (error.status === 403) {
+      if (error?.status === 403) {
         toast.error("Con el plan básico solo puedes inscribirte en 3 clases", {
           id: "enroll-class",
         });
@@ -89,7 +134,13 @@ const UsersActionColumn = ({ row }: { row: Row<GymClass> }) => {
   );
 };
 
-export const UsersClassesTable = ({ classes }: { classes: GymClass[] }) => {
+export const UsersClassesTable = ({
+  classes,
+  onClassesChanged,
+}: {
+  classes: GymClass[];
+  onClassesChanged?: () => void;
+}) => {
   const usersColumns: ColumnDef<GymClass>[] = [
     ...columns,
     {
@@ -99,14 +150,18 @@ export const UsersClassesTable = ({ classes }: { classes: GymClass[] }) => {
           Acciones
         </div>
       ),
-      cell: ({ row }) => <UsersActionColumn row={row} />,
+      cell: ({ row }) => (
+        <UsersActionColumn row={row} onClassesChanged={onClassesChanged} />
+      ),
     },
   ];
 
   return (
     <DataTable
       columns={usersColumns}
-      data={classes}
+      data={classes.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      )}
       headerClassName="last:items-center last:justify-end last:w-min last:w-[100px] last:min-w-[100px]"
     />
   );
