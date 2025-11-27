@@ -1,8 +1,8 @@
-import { ApiService } from "./api.service";
+import apiService from "./api.service";
 import { User } from "@/types";
 
 class UserService {
-  private readonly apiService = new ApiService();
+  private readonly apiService = apiService;
 
   async getUser(userId: string) {
     const data = await this.apiService.get(`/admin/users/${userId}`);
@@ -13,6 +13,7 @@ class UserService {
 
   async getAllUsers() {
     const data = await this.apiService.get("/admin/users");
+
     return data.users as User[];
   }
 
