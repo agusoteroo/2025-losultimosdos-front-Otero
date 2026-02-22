@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import TableSkeleton from "@/components/skeletons/table-skeleton";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "@/components/classes/columns";
+import { ClassAttendanceManager } from "@/components/classes/class-attendance-manager";
 
 const AdminPage = () => {
   const { selectedSede } = useStore();
@@ -52,7 +53,9 @@ const AdminPage = () => {
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
           ) || []
         }
+        
       />
+      <ClassAttendanceManager classes={classes} />
     </div>
   );
 };

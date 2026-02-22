@@ -12,6 +12,30 @@ export interface GymClass {
   isBoostedForPoints: boolean;
 
 }
+export type BookingStatus =
+  | "RESERVED"
+  | "ATTENDED"
+  | "ABSENT"
+  | "CANCELLED"
+  | "WAITLIST";
+
+export interface ClassBooking {
+  id: number;
+  classId: number;
+  userId: string;
+  status: BookingStatus;
+  waitlistPosition?: number | null;
+  checkedInAt?: string | null;
+  cancelledAt?: string | null;
+  noShowCountMonth?: number;
+  class: GymClass;
+}
+
+export interface NoShowPolicy {
+  monthlyNoShows: number;
+  monthlyThreshold: number;
+  isRestricted: boolean;
+}
 
 export interface User {
   id: string;

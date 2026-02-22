@@ -6,6 +6,7 @@ import { FullClasses } from "@/components/classes/full-classes";
 import { useStore } from "@/store/useStore";
 import { useQuery } from "@tanstack/react-query";
 import TableSkeleton from "@/components/skeletons/table-skeleton";
+import { MyBookingsCard } from "@/components/classes/my-bookings-card";
 
 const UserPage = () => {
   const { selectedSede } = useStore();
@@ -18,7 +19,7 @@ const UserPage = () => {
     queryKey: ["classes", selectedSede.id],
     queryFn: async () => {
       const response = await apiService.get(
-        `/classes?sedeId=${selectedSede.id}`
+        `/classes?sedeId=${selectedSede.id}`,
       );
       return response.classes as GymClass[];
     },
@@ -49,6 +50,8 @@ const UserPage = () => {
       <UsersClassesTable classes={available} onClassesChanged={refetch} />
 
       {full.length > 0 && <FullClasses fullClasses={full} />}
+
+      <MyBookingsCard />
     </div>
   );
 };
