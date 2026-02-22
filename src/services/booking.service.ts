@@ -4,7 +4,19 @@ import { ClassBooking, BookingStatus, NoShowPolicy } from "@/types";
 class BookingService {
   async getMyBookings(sedeId: number): Promise<ClassBooking[]> {
     const data = await apiService.get(`/user/bookings?sedeId=${sedeId}`);
-    return (data.bookings ?? []) as ClassBooking[];
+    if (Array.isArray(data)) {
+      return data as ClassBooking[];
+    }
+
+    return (
+      data.bookings ??
+      data.classes ??
+      data.items ??
+      data.data?.bookings ??
+      data.data?.classes ??
+      data.data?.items ??
+      []
+    ) as ClassBooking[];
   }
 
   async getNoShowPolicy(): Promise<NoShowPolicy | null> {
@@ -22,13 +34,24 @@ class BookingService {
     return data.booking as ClassBooking;
   }
 
+  async leaveWaitlist(classId: number): Promise<void> {
+    await apiService.delete(`/user/bookings/waitlist/${classId}`);
+  }
+
+  async getMyWaitlists(sedeId?: number): Promise<ClassBooking[]> {
+    const query = typeof sedeId === "number" ? `?sedeId=${sedeId}` : "";
+    const data = await apiService.get(`/user/bookings/waitlist${query}`);
+    return (data.bookings ?? data.items ?? []) as ClassBooking[];
+  }
+
   async updateStatus(bookingId: number, status: BookingStatus): Promise<ClassBooking> {
     const data = await apiService.put(`/admin/bookings/${bookingId}/status`, { status });
     return data.booking as ClassBooking;
   }
 
-  async getClassBookings(classId: number): Promise<ClassBooking[]> {
-    const data = await apiService.get(`/admin/class/${classId}/bookings`);
+  async getClassBookings(classId: number, status?: BookingStatus): Promise<ClassBooking[]> {
+    const query = status ? `?status=${status}` : "";
+    const data = await apiService.get(`/admin/class/${classId}/bookings${query}`);
     return (data.bookings ?? []) as ClassBooking[];
   }
 }

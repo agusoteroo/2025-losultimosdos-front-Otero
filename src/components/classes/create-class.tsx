@@ -40,7 +40,10 @@ const CreateClassSheet = ({ onCreated }: CreateClassSheetProps) => {
       <Button variant="outline" onClick={() => setIsOpen(true)}>
         Crear Clase
       </Button>
-      <SheetContent className="w-[90%] sm:w-[540px]" side="right">
+      <SheetContent
+        className="w-[95vw] sm:w-[540px] max-w-[95vw] overflow-y-auto"
+        side="right"
+      >
         <SheetHeader>
           <SheetTitle className="text-2xl font-bold">Crear Clase</SheetTitle>
         </SheetHeader>

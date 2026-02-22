@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Building2, Check, ChevronsUpDown, PlusCircle } from "lucide-react";
 import { Separator } from "./ui/separator";
 import {
@@ -33,8 +33,9 @@ import { useUser } from "@/hooks/use-user";
 export function SedesSwitcher({ isAdmin }: { isAdmin: boolean }) {
   const { selectedSede, setSelectedSede } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const { userId } = useAuth();
+  const { userId, isLoaded: isAuthLoaded } = useAuth();
   const { user } = useClerk();
   const queryClient = useQueryClient();
   const { data: sedes, isLoading } = useQuery({
@@ -62,6 +63,10 @@ export function SedesSwitcher({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleCreateSede = async (values: SedeFormValues) => {
     try {
       await apiService.post("/admin/sedes", values);
@@ -86,7 +91,7 @@ export function SedesSwitcher({ isAdmin }: { isAdmin: boolean }) {
     setSelectedSede(sede);
   };
 
-  if (isLoading) {
+  if (!mounted || !isAuthLoaded || isLoading) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

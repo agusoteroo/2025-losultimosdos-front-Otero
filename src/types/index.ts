@@ -24,6 +24,13 @@ export interface ClassBooking {
   classId: number;
   userId: string;
   status: BookingStatus;
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+    email?: string | null;
+  };
   waitlistPosition?: number | null;
   checkedInAt?: string | null;
   cancelledAt?: string | null;
@@ -35,6 +42,31 @@ export interface NoShowPolicy {
   monthlyNoShows: number;
   monthlyThreshold: number;
   isRestricted: boolean;
+  currentWindow?: {
+    minutes?: number;
+    noShows?: number;
+    threshold?: number;
+    restricted?: boolean;
+    restrictionUntil?: string | null;
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+export interface WaitlistPromotionInfo {
+  promoted: boolean;
+  userId: string;
+  classId: number;
+  pointsGranted: boolean;
+  pointsAwarded: number;
+  reason?: "existing_event" | "points_error";
+}
+
+export interface UnenrollResponse {
+  message?: string;
+  class?: GymClass;
+  waitlistPromotion?: WaitlistPromotionInfo | null;
+  pointsAwarded?: number;
 }
 
 export interface User {
