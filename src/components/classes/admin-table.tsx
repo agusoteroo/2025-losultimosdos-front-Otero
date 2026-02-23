@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { type ColumnDef } from "@tanstack/react-table";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { ClassForm } from "@/components/forms/class";
 import { type GymClass } from "@/types";
 import { columns } from "@/components/classes/columns";
 import { cn } from "@/lib/utils";
+import { useStore } from "@/store/useStore";
 
 const useIsMobile = (query = "(max-width: 640px)") => {
   const [isMobile, setIsMobile] = useState(false);
@@ -51,22 +53,35 @@ const AdminTable = ({ classes }: AdminTableProps) => {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const isMobile = useIsMobile();
-  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { selectedSede } = useStore();
+
+  const refreshClassLists = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["classes", selectedSede.id] }),
+      queryClient.invalidateQueries({
+        queryKey: ["adminAttendanceClasses", selectedSede.id],
+      }),
+    ]);
+  };
 
   const onDelete = async (id: number) => {
     try {
       setDeletingId(id);
+      toast.loading("Eliminando clase...", { id: "delete-class" });
       await apiService.delete(`/admin/class/${id}`);
-      router.refresh();
+      await refreshClassLists();
+      toast.success("Clase eliminada correctamente", { id: "delete-class" });
+    } catch (error) {
+      toast.error("Error al eliminar la clase", { id: "delete-class" });
     } finally {
       setDeletingId(null);
     }
   };
 
   const onEdit = async (values: GymClass) => {
-    // Enviamos todo el objeto; el back valida con Zod y usa lo que necesita
     await apiService.put(`/admin/class/${values.id}`, { ...values });
-    router.refresh();
+    await refreshClassLists();
     setSelectedClass(null);
   };
 

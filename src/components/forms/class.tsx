@@ -33,11 +33,16 @@ const classFormSchema = z.object({
   description: z
     .string()
     .min(10, "La descripcion debe tener al menos 10 caracteres"),
-  date: z.date().refine((date) => {
-    const selectedDateOnly = getLocalDateOnly(date);
-    const argentinaNow = getArgentinaNowParts();
-    return selectedDateOnly >= argentinaNow.dateOnly;
-  }, "La fecha tiene que ser en el futuro"),
+  date: z
+    .date({
+      required_error: "Selecciona una fecha",
+      invalid_type_error: "Selecciona una fecha valida",
+    })
+    .refine((date) => {
+      const selectedDateOnly = getLocalDateOnly(date);
+      const argentinaNow = getArgentinaNowParts();
+      return selectedDateOnly >= argentinaNow.dateOnly;
+    }, "La fecha tiene que ser hoy o en el futuro"),
   time: z.string().refine(
     (time) => {
       const match = time.match(/^(\d{1,2}):(\d{2})$/);
