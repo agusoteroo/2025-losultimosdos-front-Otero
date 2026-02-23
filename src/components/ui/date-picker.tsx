@@ -14,6 +14,7 @@ export interface DatePickerProps {
   onDateChange?: (date: Date | undefined) => void;
   className?: string;
   placeholder?: string;
+  minDate?: Date;
 }
 
 export function DatePicker({
@@ -21,9 +22,12 @@ export function DatePicker({
   onDateChange,
   className,
   placeholder = "Pick a date",
+  minDate,
 }: DatePickerProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const normalizedMinDate = minDate ? new Date(minDate) : today;
+  normalizedMinDate.setHours(0, 0, 0, 0);
 
   return (
     <Popover>
@@ -52,7 +56,7 @@ export function DatePicker({
           disabled={(date) => {
             const candidate = new Date(date);
             candidate.setHours(0, 0, 0, 0);
-            return candidate < today;
+            return candidate < normalizedMinDate;
           }}
         />
       </PopoverContent>
