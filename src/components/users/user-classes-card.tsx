@@ -87,15 +87,45 @@ const normalizeAdminUserClasses = (
   return Array.from(byId.values());
 };
 
-const getClassDateTimeMs = (gymClass: GymClass) => {
-  const rawDateValue = gymClass.date as string | Date;
-  const rawDate =
-    typeof rawDateValue === "string"
-      ? rawDateValue
-      : new Date(rawDateValue).toISOString();
-  const dateOnly = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
-  const time = typeof gymClass.time === "string" && gymClass.time ? gymClass.time : "00:00";
-  return new Date(`${dateOnly}T${time}`).getTime();
+const getDateOnly = (value: string | Date | undefined) => {
+  if (!value) return null;
+  const raw = typeof value === "string" ? value : value.toISOString();
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+};
+
+const getTimeMinutes = (time?: string | null) => {
+  if (!time) return null;
+  const match = time.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+const getNowDateOnly = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const isUpcomingClass = (gymClass: GymClass) => {
+  const classDateOnly = getDateOnly(gymClass.date as string | Date);
+  if (!classDateOnly) return false;
+
+  const today = getNowDateOnly();
+  if (classDateOnly > today) return true;
+  if (classDateOnly < today) return false;
+
+  const classMinutes = getTimeMinutes(gymClass.time);
+  if (classMinutes === null) return true;
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return classMinutes >= nowMinutes;
 };
 
 const useIsMobile = (query = "(max-width: 640px)") => {
@@ -161,7 +191,6 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
 
   const visibleUserClasses = useMemo(() => {
     const seen = new Set<number>();
-    const now = Date.now();
 
     return (userClasses as AdminUserClassListItem[])
       .filter((c) => {
@@ -172,10 +201,7 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
         return true;
       })
       .filter((c) => c.bookingStatus !== "CANCELLED")
-      .filter((c) => {
-        const classDateTimeMs = getClassDateTimeMs(c);
-        return Number.isFinite(classDateTimeMs) && classDateTimeMs >= now;
-      })
+      .filter((c) => isUpcomingClass(c))
       .filter((c) =>
         Array.isArray(c.users) && c.users.length > 0
           ? c.users.includes(userId)

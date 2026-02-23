@@ -98,6 +98,47 @@ const getApiErrorMessage = (error: unknown) => {
   return null;
 };
 
+const getDateOnly = (value: string | Date | undefined) => {
+  if (!value) return null;
+  const raw = typeof value === "string" ? value : value.toISOString();
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+};
+
+const getTimeMinutes = (time?: string | null) => {
+  if (!time) return null;
+  const match = time.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+const getNowDateOnly = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const isUpcomingClass = (gymClass: GymClass) => {
+  const classDateOnly = getDateOnly(gymClass.date as string | Date);
+  if (!classDateOnly) return false;
+
+  const today = getNowDateOnly();
+  if (classDateOnly > today) return true;
+  if (classDateOnly < today) return false;
+
+  const classMinutes = getTimeMinutes(gymClass.time);
+  if (classMinutes === null) return true;
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return classMinutes >= nowMinutes;
+};
+
 const getClassDateTimeMs = (gymClass: GymClass) => {
   const rawDateValue = gymClass.date as string | Date;
   const rawDate =
@@ -105,7 +146,9 @@ const getClassDateTimeMs = (gymClass: GymClass) => {
       ? rawDateValue
       : new Date(rawDateValue).toISOString();
   const dateOnly = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
-  const time = typeof gymClass.time === "string" && gymClass.time ? gymClass.time : "00:00";
+  const timeMatch =
+    typeof gymClass.time === "string" ? gymClass.time.match(/(\d{1,2}:\d{2})/) : null;
+  const time = timeMatch?.[1] ?? "00:00";
   return new Date(`${dateOnly}T${time}`).getTime();
 };
 
@@ -196,7 +239,6 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
 
   const { mutate: assignClass, isPending: isAssigning } =
     useEnrollClass(userId);
-  const now = Date.now();
   const restrictionRemainingMs = useMemo(() => {
     if (!restrictionUntil) {
       return 0;
@@ -294,8 +336,7 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
           <div className="space-y-2">
             {availableClasses
               .filter((gymClass: GymClass) => {
-                const classDateTimeMs = getClassDateTimeMs(gymClass);
-                return Number.isFinite(classDateTimeMs) && classDateTimeMs >= now;
+                return isUpcomingClass(gymClass);
               })
               .sort(
                 (a: GymClass, b: GymClass) =>
