@@ -25,6 +25,7 @@ import { toast } from "react-hot-toast";
 import { ApiValidationError } from "@/services/api.service";
 import { useStore } from "@/store/useStore";
 import { useQueryClient } from "@tanstack/react-query";
+import { getArgentinaNowParts, getLocalDateOnly } from "@/lib/argentina-time";
 
 const classFormSchema = z.object({
   id: z.number(),
@@ -33,14 +34,24 @@ const classFormSchema = z.object({
     .string()
     .min(10, "La descripcion debe tener al menos 10 caracteres"),
   date: z.date().refine((date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date >= today;
+    const selectedDateOnly = getLocalDateOnly(date);
+    const argentinaNow = getArgentinaNowParts();
+    return selectedDateOnly >= argentinaNow.dateOnly;
   }, "La fecha tiene que ser en el futuro"),
   time: z.string().refine(
     (time) => {
-      const [hours] = time.split(":").map(Number);
-      return hours >= 8 && hours < 21;
+      const match = time.match(/^(\d{1,2}):(\d{2})$/);
+      if (!match) return false;
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      return (
+        Number.isFinite(hours) &&
+        Number.isFinite(minutes) &&
+        minutes >= 0 &&
+        minutes <= 59 &&
+        hours >= 8 &&
+        hours < 21
+      );
     },
     {
       message: "La hora tiene que ser entre las 8:00 y 21:00",
@@ -55,6 +66,26 @@ const classFormSchema = z.object({
   users: z.array(z.string()),
   sedeId: z.number(),
   isBoostedForPoints: z.boolean(),
+}).superRefine((values, ctx) => {
+  const timeMatch = values.time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!timeMatch) return;
+
+  const argentinaNow = getArgentinaNowParts();
+  const selected = new Date(values.date);
+  const isToday = getLocalDateOnly(selected) === argentinaNow.dateOnly;
+
+  if (!isToday) return;
+
+  const selectedMinutes = Number(timeMatch[1]) * 60 + Number(timeMatch[2]);
+  const nowMinutes = argentinaNow.totalMinutes;
+
+  if (selectedMinutes < nowMinutes) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["time"],
+      message: "Para hoy, la hora no puede ser anterior a la actual",
+    });
+  }
 });
 
 export type ClassFormValues = z.infer<typeof classFormSchema>;
