@@ -88,7 +88,7 @@ export const ClassForm = ({
       createdById: defaultValues?.createdById ?? "",
       users: defaultValues?.users ?? [],
       sedeId: defaultValues?.sedeId ?? selectedSede.id,
-      isBoostedForPoints: defaultValues?.isBoostedForPoints,
+      isBoostedForPoints: defaultValues?.isBoostedForPoints ?? false,
     },
   });
   const handleSubmit = async (values: ClassFormValues) => {

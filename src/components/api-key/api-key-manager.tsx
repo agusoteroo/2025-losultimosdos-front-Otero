@@ -33,15 +33,14 @@ import {
   IconKey,
   IconCopy,
   IconRefresh,
-  IconEye,
-  IconEyeOff,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const ApiKeyManager = () => {
   const [apiKey, setApiKey] = useState<ApiKey | null>(null);
+  const [plaintextKey, setPlaintextKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showKey, setShowKey] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
@@ -68,6 +67,7 @@ export const ApiKeyManager = () => {
     try {
       const newKey = await apiKeyService.generateApiKey();
       setApiKey(newKey);
+      setPlaintextKey(newKey.key ?? null);
       toast.success("API key generada exitosamente");
     } catch (error: any) {
       if (error?.status === 409) {
@@ -87,8 +87,8 @@ export const ApiKeyManager = () => {
     try {
       const newKey = await apiKeyService.regenerateApiKey(apiKey.id);
       setApiKey(newKey);
+      setPlaintextKey(newKey.key ?? null);
       toast.success("API key regenerada exitosamente");
-      setShowKey(true);
     } catch (error: any) {
       if (error?.status === 404) {
         toast.error("API key no encontrada");
@@ -131,21 +131,18 @@ export const ApiKeyManager = () => {
   };
 
   const handleCopyKey = async () => {
-    if (!apiKey?.key) return;
+    if (!plaintextKey) return;
 
     try {
-      await navigator.clipboard.writeText(apiKey.key);
+      await navigator.clipboard.writeText(plaintextKey);
       toast.success("API key copiada al portapapeles");
     } catch (error) {
       toast.error("Error al copiar la API key");
     }
   };
 
-  const maskApiKey = (key: string): string => {
-    if (key.length <= 8) return key;
-    return `${key.substring(0, 4)}${"*".repeat(key.length - 8)}${key.substring(
-      key.length - 4
-    )}`;
+  const handleDismissPlaintextKey = () => {
+    setPlaintextKey(null);
   };
 
   if (loading) {
@@ -155,6 +152,8 @@ export const ApiKeyManager = () => {
       </div>
     );
   }
+
+  const exampleKeyValue = plaintextKey ?? "TU_API_KEY";
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -222,41 +221,65 @@ export const ApiKeyManager = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="api-key">API Key</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="api-key"
-                  value={
-                    showKey
-                      ? apiKey.key ?? ""
-                      : maskApiKey(apiKey.key ?? apiKey.keyLastFour ?? "••••••••")
-                  }
-                  readOnly
-                  className="font-mono"
-                />
+            {plaintextKey ? (
+              <div
+                className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4 space-y-3"
+                role="alert"
+              >
+                <div className="flex items-center gap-2 font-semibold text-yellow-600 dark:text-yellow-400">
+                  <IconAlertTriangle className="w-5 h-5" />
+                  <span>Copia tu API key ahora</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Esta es la única vez que podrás ver tu API key. Guárdala en un
+                  lugar seguro. No podrás recuperarla después de salir de esta
+                  página.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    id="api-key"
+                    value={plaintextKey}
+                    readOnly
+                    className="font-mono"
+                    aria-label="Tu API key en texto plano"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyKey}
+                    title="Copiar al portapapeles"
+                    aria-label="Copiar API key al portapapeles"
+                    tabIndex={0}
+                  >
+                    <IconCopy className="w-4 h-4" />
+                  </Button>
+                </div>
                 <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowKey(!showKey)}
-                  title={showKey ? "Ocultar key" : "Mostrar key"}
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissPlaintextKey}
+                  className="text-muted-foreground"
                 >
-                  {showKey ? (
-                    <IconEyeOff className="w-4 h-4" />
-                  ) : (
-                    <IconEye className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyKey}
-                  title="Copiar al portapapeles"
-                >
-                  <IconCopy className="w-4 h-4" />
+                  Ya la copié, ocultar key
                 </Button>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="api-key">API Key</Label>
+                <Input
+                  id="api-key"
+                  value="••••••••••••••••••••••••••••••••"
+                  readOnly
+                  disabled
+                  className="font-mono"
+                  aria-label="API key oculta"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Por seguridad, la key no se puede volver a mostrar. Si la
+                  perdiste, regenera una nueva.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -342,9 +365,7 @@ export const ApiKeyManager = () => {
                   }}
                 >
                   {`curl -X GET https://api.gymcloud.com/v1/data \\
-  -H "Authorization: Bearer ${
-    apiKey?.key && showKey ? apiKey.key : "TU_API_KEY"
-  }"`}
+  -H "Authorization: Bearer ${exampleKeyValue}"`}
                 </SyntaxHighlighter>
               </div>
             </TabsContent>
@@ -366,9 +387,7 @@ export const ApiKeyManager = () => {
                   {`fetch('https://api.gymcloud.com/v1/data', {
   method: 'GET',
   headers: {
-    'Authorization': 'Bearer ${
-      apiKey?.key && showKey ? apiKey.key : "TU_API_KEY"
-    }',
+    'Authorization': 'Bearer ${exampleKeyValue}',
     'Content-Type': 'application/json'
   }
 })
@@ -398,11 +417,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-String apiKey = "${
-                    apiKey?.key && showKey
-                      ? apiKey.key
-                      : "TU_API_KEY"
-                  }";
+String apiKey = "${exampleKeyValue}";
 String url = "https://api.gymcloud.com/v1/data";
 
 HttpClient client = HttpClient.newHttpClient();
