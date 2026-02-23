@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import apiService from "@/services/api.service";
-import { GymClass, User } from "@/types";
+import apiService, { ApiValidationError } from "@/services/api.service";
+import { BookingStatus, GymClass, User } from "@/types";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
 import {
@@ -16,13 +15,138 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 import { useEnrollClass } from "@/hooks/use-class-mutations";
+import { formatRemainingMmSs } from "@/lib/no-show-policy-utils";
 
 interface AvailableClassesModalProps {
   user: User;
 }
 
+type AdminUserClassListItem = GymClass & { bookingStatus?: BookingStatus };
+
+const VISIBLE_BOOKING_STATUSES = new Set<BookingStatus>([
+  "RESERVED",
+  "ATTENDED",
+  "ABSENT",
+  "CANCELLED",
+]);
+
+const getStatusPriority = (status?: BookingStatus) => {
+  if (status === "RESERVED" || status === "ATTENDED" || status === "ABSENT") {
+    return 2;
+  }
+  if (status === "CANCELLED") {
+    return 1;
+  }
+  return 0;
+};
+
+const normalizeAdminUserClasses = (
+  items: unknown[],
+  userId: string
+): AdminUserClassListItem[] => {
+  const byId = new Map<number, AdminUserClassListItem>();
+
+  for (const raw of items as any[]) {
+    const status =
+      typeof raw?.status === "string" ? (raw.status as BookingStatus) : undefined;
+    if (status && !VISIBLE_BOOKING_STATUSES.has(status)) {
+      continue;
+    }
+
+    const maybeClass = raw?.class ?? raw;
+    if (!maybeClass || typeof maybeClass.id !== "number") {
+      continue;
+    }
+
+    const users = Array.isArray(maybeClass.users) ? maybeClass.users : undefined;
+    const shouldValidateUsersMembership = status !== "CANCELLED";
+    if (
+      shouldValidateUsersMembership &&
+      users &&
+      users.length > 0 &&
+      !users.includes(userId)
+    ) {
+      continue;
+    }
+
+    const nextItem: AdminUserClassListItem = {
+      ...(maybeClass as GymClass),
+      bookingStatus: status,
+    };
+    const current = byId.get(maybeClass.id);
+    if (
+      !current ||
+      getStatusPriority(nextItem.bookingStatus) >=
+        getStatusPriority(current.bookingStatus)
+    ) {
+      byId.set(maybeClass.id, nextItem);
+    }
+  }
+
+  return Array.from(byId.values());
+};
+
+const getApiErrorMessage = (error: unknown) => {
+  if (error instanceof ApiValidationError && error.details?.length) {
+    return error.details[0]?.message ?? null;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return null;
+};
+
+const isRestrictionError = (error: unknown) => {
+  const status = (error as any)?.status;
+  const message = (getApiErrorMessage(error) ?? "").toLowerCase();
+
+  if (status === 421) {
+    return true;
+  }
+
+  if (status === 403) {
+    return (
+      message.includes("strikes") ||
+      message.includes("no pod") ||
+      message.includes("reservar clases")
+    );
+  }
+
+  return false;
+};
+
+const getRestrictionUntilFromError = (error: unknown) => {
+  if (!(error instanceof ApiValidationError)) {
+    return null;
+  }
+
+  const payload = error.payload ?? {};
+  const candidates = [
+    payload.restrictionUntil,
+    payload.policy?.currentWindow?.restrictionUntil,
+    payload.currentWindow?.restrictionUntil,
+    payload.strikeAlert?.restrictionUntil,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && Number.isFinite(new Date(candidate).getTime())) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
 const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
   const [open, setOpen] = useState(false);
+  const [isUserRestricted, setIsUserRestricted] = useState(false);
+  const [restrictionMessage, setRestrictionMessage] = useState<string | null>(
+    null
+  );
+  const [restrictionUntil, setRestrictionUntil] = useState<string | null>(null);
+  const [restrictionNow, setRestrictionNow] = useState(Date.now());
   const { id: userId, sedeId } = user;
   const { data: availableClasses = [], isLoading } = useQuery({
     queryKey: ["classes", sedeId],
@@ -32,9 +156,81 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
     },
     enabled: open,
   });
+  const { data: userClasses = [] } = useQuery({
+    queryKey: ["userClasses", userId],
+    queryFn: async () => {
+      const response = await apiService.get(
+        `/admin/users/${userId}/bookings?sedeId=${sedeId}`
+      );
+      return normalizeAdminUserClasses(
+        response.bookings || response.items || response.classes || [],
+        userId
+      );
+    },
+    enabled: open,
+  });
+  const assignedClassIds = new Set(
+    (userClasses as AdminUserClassListItem[])
+      .filter((c) =>
+        c.bookingStatus !== "CANCELLED" &&
+        (Array.isArray(c.users) && c.users.length > 0 ? c.users.includes(userId) : true)
+      )
+      .map((c) => c.id)
+  );
+  const cancelledClassIds = new Set(
+    (userClasses as AdminUserClassListItem[])
+      .filter((c) => c.bookingStatus === "CANCELLED")
+      .map((c) => c.id)
+  );
 
   const { mutate: assignClass, isPending: isAssigning } =
     useEnrollClass(userId);
+  const restrictionRemainingMs = useMemo(() => {
+    if (!restrictionUntil) {
+      return 0;
+    }
+    const endMs = new Date(restrictionUntil).getTime();
+    if (!Number.isFinite(endMs)) {
+      return 0;
+    }
+    return Math.max(0, endMs - restrictionNow);
+  }, [restrictionNow, restrictionUntil]);
+  const isRestrictionActive = isUserRestricted && (!restrictionUntil || restrictionRemainingMs > 0);
+
+  useEffect(() => {
+    if (!open || !isUserRestricted || !restrictionUntil) {
+      return;
+    }
+
+    const endMs = new Date(restrictionUntil).getTime();
+    if (!Number.isFinite(endMs)) {
+      return;
+    }
+
+    if (endMs <= Date.now()) {
+      setIsUserRestricted(false);
+      setRestrictionMessage(null);
+      setRestrictionUntil(null);
+      return;
+    }
+
+    const interval = window.setInterval(() => setRestrictionNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [isUserRestricted, open, restrictionUntil]);
+
+  useEffect(() => {
+    if (!isUserRestricted || !restrictionUntil) {
+      return;
+    }
+
+    if (restrictionRemainingMs > 0) {
+      return;
+    }
+
+    setIsUserRestricted(false);
+    setRestrictionMessage(null);
+    setRestrictionUntil(null);
+  }, [isUserRestricted, restrictionRemainingMs, restrictionUntil]);
 
   if (isLoading) {
     return (
@@ -45,7 +241,17 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setIsUserRestricted(false);
+          setRestrictionMessage(null);
+          setRestrictionUntil(null);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Plus className="h-4 w-4 mr-2" />
@@ -60,6 +266,19 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[400px] overflow-y-auto">
+          {isRestrictionActive ? (
+            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+              <div>
+                {restrictionMessage ??
+                  "Este usuario tiene una restriccion activa y no puede reservar clases por el momento."}
+              </div>
+              {restrictionUntil && restrictionRemainingMs > 0 ? (
+                <div className="mt-1 font-medium">
+                  Se habilita en {formatRemainingMmSs(restrictionRemainingMs)}.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="space-y-2">
             {availableClasses
               .sort(
@@ -83,19 +302,43 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
                       {gymClass.enrolled}/{gymClass.capacity} inscritos
                     </p>
                   </div>
-                  {gymClass.users.includes(userId) ? (
+                  {assignedClassIds.has(gymClass.id) ? (
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       Asignada
                     </p>
+                  ) : cancelledClassIds.has(gymClass.id) ? (
+                    <span className="inline-flex items-center rounded-md border border-red-200 bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                      Clase cancelada
+                    </span>
                   ) : (
                     <Button
-                      onClick={() => assignClass(gymClass)}
+                      onClick={() =>
+                        assignClass(gymClass, {
+                          onError: (error) => {
+                            if (isRestrictionError(error)) {
+                              setIsUserRestricted(true);
+                              setRestrictionNow(Date.now());
+                              setRestrictionMessage(
+                                getApiErrorMessage(error) ??
+                                  "Este usuario tiene una restriccion activa y no puede reservar clases por el momento."
+                              );
+                              setRestrictionUntil(getRestrictionUntilFromError(error));
+                            }
+                          },
+                        })
+                      }
                       disabled={
-                        isAssigning || gymClass.enrolled >= gymClass.capacity
+                        isAssigning ||
+                        isRestrictionActive ||
+                        gymClass.enrolled >= gymClass.capacity
                       }
                       size="sm"
                     >
-                      {gymClass.enrolled >= gymClass.capacity
+                      {isRestrictionActive
+                        ? restrictionUntil && restrictionRemainingMs > 0
+                          ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+                          : "Restringido"
+                        : gymClass.enrolled >= gymClass.capacity
                         ? "Llena"
                         : "Asignar"}
                     </Button>

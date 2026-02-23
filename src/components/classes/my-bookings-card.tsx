@@ -213,6 +213,10 @@ export const MyBookingsCard = () => {
             >
               Cancelar inscripcion
             </Button>
+          ) : booking.status === "CANCELLED" ? (
+            <span className="inline-flex items-center rounded-md border border-red-200 bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+              Clase cancelada
+            </span>
           ) : null}
         </div>
       </div>

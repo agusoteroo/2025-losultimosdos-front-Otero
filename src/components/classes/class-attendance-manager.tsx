@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { CalendarX2 } from "lucide-react";
 
 const attendanceStatusOptions: BookingStatus[] = ["ATTENDED", "ABSENT"];
 
@@ -153,6 +154,19 @@ export const ClassAttendanceManager = ({ classes }: { classes: GymClass[] }) => 
         <CardTitle>Toma de asistencia</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {classes.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <CalendarX2 className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">No hay clases para tomar asistencia</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Cuando haya clases programadas, van a aparecer ac&aacute; para marcar
+              presentes y ausentes.
+            </p>
+          </div>
+        ) : (
+          <>
         <Select value={selectedClassId} onValueChange={setSelectedClassId}>
           <SelectTrigger>
             <SelectValue placeholder="Seleccionar clase" />
@@ -212,6 +226,8 @@ export const ClassAttendanceManager = ({ classes }: { classes: GymClass[] }) => 
             </p>
           ) : null}
         </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

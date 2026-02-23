@@ -54,9 +54,11 @@ const getApiErrorMessage = (error: unknown) => {
 const UsersActionColumn = ({
   row,
   onClassesChanged,
+  cancelledClassIds,
 }: {
   row: Row<GymClass>;
   onClassesChanged?: () => void;
+  cancelledClassIds: Set<number>;
 }) => {
   const { userId } = useAuth();
   const router = useRouter();
@@ -102,6 +104,7 @@ const UsersActionColumn = ({
       setEnrolled(row.original.users.includes(userId));
     }
   }, [userId, row.original.users]);
+  const isCancelledForUser = !enrolled && cancelledClassIds.has(row.original.id);
 
   const handleEnroll = async (classId: number) => {
     try {
@@ -132,6 +135,14 @@ const UsersActionColumn = ({
       }
 
       onClassesChanged?.();
+
+      queryClient.invalidateQueries({ queryKey: ["myBookings", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["myWaitlists", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["classes", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
+      queryClient.invalidateQueries({
+        queryKey: ["my-gamification", selectedSede.id],
+      });
 
       queryClient.invalidateQueries({
         queryKey: [
@@ -242,6 +253,14 @@ const UsersActionColumn = ({
             >
               {isLoading ? "Cancelando..." : "Cancelar inscripción"}
             </Button>
+          ) : isCancelledForUser ? (
+            <div className="inline-flex h-[36px] w-[150px] items-center justify-center rounded-md border border-red-200 bg-red-100 px-3 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+              Clase cancelada
+            </div>
+          ) : isCancelledForUser ? (
+            <div className="inline-flex h-[36px] w-full items-center justify-center rounded-md border border-red-200 bg-red-100 px-3 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+              Clase cancelada
+            </div>
           ) : (
             <Button
               variant="default"
@@ -260,9 +279,11 @@ const UsersActionColumn = ({
 const MobileActionButton = ({
   gymClass,
   onClassesChanged,
+  cancelledClassIds,
 }: {
   gymClass: GymClass;
   onClassesChanged?: () => void;
+  cancelledClassIds: Set<number>;
 }) => {
   const { userId } = useAuth();
   const router = useRouter();
@@ -308,6 +329,7 @@ const MobileActionButton = ({
       setEnrolled(gymClass.users.includes(userId));
     }
   }, [userId, gymClass.users]);
+  const isCancelledForUser = !enrolled && cancelledClassIds.has(gymClass.id);
 
   const handleEnroll = async (classId: number) => {
     try {
@@ -334,6 +356,14 @@ const MobileActionButton = ({
       }
 
       onClassesChanged?.();
+
+      queryClient.invalidateQueries({ queryKey: ["myBookings", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["myWaitlists", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["classes", selectedSede.id] });
+      queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
+      queryClient.invalidateQueries({
+        queryKey: ["my-gamification", selectedSede.id],
+      });
 
       queryClient.invalidateQueries({
         queryKey: [
@@ -467,6 +497,35 @@ export const UsersClassesTable = ({
   classes: GymClass[];
   onClassesChanged?: () => void;
 }) => {
+  const { userId } = useAuth();
+  const { selectedSede } = useStore();
+  const { data: myBookings = [] } = useQuery({
+    queryKey: ["myBookings", selectedSede.id],
+    queryFn: () => bookingService.getMyBookings(selectedSede.id),
+    enabled: !!userId && !!selectedSede.id,
+  });
+
+  const cancelledClassIds = useMemo(() => {
+    const ids = new Set<number>();
+
+    myBookings.forEach((booking) => {
+      if (booking.status !== "CANCELLED") {
+        return;
+      }
+
+      if (typeof booking.classId === "number") {
+        ids.add(booking.classId);
+        return;
+      }
+
+      if (typeof booking.class?.id === "number") {
+        ids.add(booking.class.id);
+      }
+    });
+
+    return ids;
+  }, [myBookings]);
+
   const usersColumns: ColumnDef<GymClass>[] = [
     ...columns,
     {
@@ -477,7 +536,11 @@ export const UsersClassesTable = ({
         </div>
       ),
       cell: ({ row }) => (
-        <UsersActionColumn row={row} onClassesChanged={onClassesChanged} />
+        <UsersActionColumn
+          row={row}
+          onClassesChanged={onClassesChanged}
+          cancelledClassIds={cancelledClassIds}
+        />
       ),
     },
   ];
@@ -536,6 +599,7 @@ export const UsersClassesTable = ({
                 <MobileActionButton
                   gymClass={cls}
                   onClassesChanged={onClassesChanged}
+                  cancelledClassIds={cancelledClassIds}
                 />
               </CardHeader>
 
