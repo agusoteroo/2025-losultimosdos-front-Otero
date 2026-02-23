@@ -22,6 +22,9 @@ export function DatePicker({
   className,
   placeholder = "Pick a date",
 }: DatePickerProps) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -42,8 +45,15 @@ export function DatePicker({
         <Calendar
           mode="single"
           selected={date}
-          onSelect={onDateChange}
-          disabled={(date) => date < new Date()}
+          onSelect={(nextDate) => {
+            if (!nextDate) return;
+            onDateChange?.(nextDate);
+          }}
+          disabled={(date) => {
+            const candidate = new Date(date);
+            candidate.setHours(0, 0, 0, 0);
+            return candidate < today;
+          }}
         />
       </PopoverContent>
     </Popover>
