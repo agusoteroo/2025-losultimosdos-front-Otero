@@ -87,6 +87,17 @@ const normalizeAdminUserClasses = (
   return Array.from(byId.values());
 };
 
+const getClassDateTimeMs = (gymClass: GymClass) => {
+  const rawDateValue = gymClass.date as string | Date;
+  const rawDate =
+    typeof rawDateValue === "string"
+      ? rawDateValue
+      : new Date(rawDateValue).toISOString();
+  const dateOnly = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
+  const time = typeof gymClass.time === "string" && gymClass.time ? gymClass.time : "00:00";
+  return new Date(`${dateOnly}T${time}`).getTime();
+};
+
 const useIsMobile = (query = "(max-width: 640px)") => {
   const [isMobile, setIsMobile] = useState(false);
 
@@ -116,6 +127,18 @@ const CancelledLabel = ({ mobile = false }: { mobile?: boolean }) => (
   </div>
 );
 
+const ReadOnlyStatusLabel = ({ mobile = false }: { mobile?: boolean }) => (
+  <div
+    className={
+      mobile
+        ? "w-full rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-center text-sm font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+        : "inline-flex items-center rounded-md border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+    }
+  >
+    Sin accion disponible
+  </div>
+);
+
 const UserClassesCard = ({ user }: UserClassesCardProps) => {
   const { id: userId, sedeId } = user;
   const isMobile = useIsMobile();
@@ -138,6 +161,7 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
 
   const visibleUserClasses = useMemo(() => {
     const seen = new Set<number>();
+    const now = Date.now();
 
     return (userClasses as AdminUserClassListItem[])
       .filter((c) => {
@@ -148,6 +172,10 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
         return true;
       })
       .filter((c) => c.bookingStatus !== "CANCELLED")
+      .filter((c) => {
+        const classDateTimeMs = getClassDateTimeMs(c);
+        return Number.isFinite(classDateTimeMs) && classDateTimeMs >= now;
+      })
       .filter((c) =>
         Array.isArray(c.users) && c.users.length > 0
           ? c.users.includes(userId)
@@ -210,6 +238,8 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
                   <div className="col-span-2 pt-2">
                     {c.bookingStatus === "CANCELLED" ? (
                       <CancelledLabel mobile />
+                    ) : c.bookingStatus !== "RESERVED" ? (
+                      <ReadOnlyStatusLabel mobile />
                     ) : (
                       <Button
                         variant="destructive"
@@ -274,6 +304,8 @@ const UserClassesCard = ({ user }: UserClassesCardProps) => {
                     <TableCell className="flex items-center justify-center px-4 py-3">
                       {c.bookingStatus === "CANCELLED" ? (
                         <CancelledLabel />
+                      ) : c.bookingStatus !== "RESERVED" ? (
+                        <ReadOnlyStatusLabel />
                       ) : (
                         <Button
                           variant="destructive"

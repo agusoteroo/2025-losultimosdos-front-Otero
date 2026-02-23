@@ -98,6 +98,17 @@ const getApiErrorMessage = (error: unknown) => {
   return null;
 };
 
+const getClassDateTimeMs = (gymClass: GymClass) => {
+  const rawDateValue = gymClass.date as string | Date;
+  const rawDate =
+    typeof rawDateValue === "string"
+      ? rawDateValue
+      : new Date(rawDateValue).toISOString();
+  const dateOnly = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
+  const time = typeof gymClass.time === "string" && gymClass.time ? gymClass.time : "00:00";
+  return new Date(`${dateOnly}T${time}`).getTime();
+};
+
 const isRestrictionError = (error: unknown) => {
   const status = (error as any)?.status;
   const message = (getApiErrorMessage(error) ?? "").toLowerCase();
@@ -185,6 +196,7 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
 
   const { mutate: assignClass, isPending: isAssigning } =
     useEnrollClass(userId);
+  const now = Date.now();
   const restrictionRemainingMs = useMemo(() => {
     if (!restrictionUntil) {
       return 0;
@@ -281,9 +293,13 @@ const AvailableClassesModal = ({ user }: AvailableClassesModalProps) => {
           ) : null}
           <div className="space-y-2">
             {availableClasses
+              .filter((gymClass: GymClass) => {
+                const classDateTimeMs = getClassDateTimeMs(gymClass);
+                return Number.isFinite(classDateTimeMs) && classDateTimeMs >= now;
+              })
               .sort(
                 (a: GymClass, b: GymClass) =>
-                  new Date(a.date).getTime() - new Date(b.date).getTime()
+                  getClassDateTimeMs(a) - getClassDateTimeMs(b)
               )
               .map((gymClass: GymClass) => (
                 <div

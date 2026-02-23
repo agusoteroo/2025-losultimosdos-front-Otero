@@ -26,6 +26,7 @@ import {
   getRestrictionRemainingMs,
   isNoShowRestricted,
 } from "@/lib/no-show-policy-utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof ApiValidationError && error.details?.length) {
@@ -229,45 +230,58 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
+  const sortedFullClasses = useMemo(
+    () =>
+      [...(fullClasses || [])].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      ),
+    [fullClasses]
+  );
+
+  const renderActionButton = (gymClass: GymClass, mobile = false) => {
+    const isEnrolled = userId ? gymClass.users.includes(userId) : false;
+    const isWaitlisted = waitlistedClassIds.has(gymClass.id);
+    const isMutating =
+      joinWaitlistMutation.isPending ||
+      leaveWaitlistMutation.isPending ||
+      cancelEnrollmentMutation.isPending;
+    const isJoinWaitlistAction = !isEnrolled && !isWaitlisted;
+    const disableForRestriction = isJoinWaitlistAction && isRestrictionActive;
+
+    return (
+      <Button
+        size="sm"
+        variant={isEnrolled ? "destructive" : "outline"}
+        className={mobile ? "w-full h-auto whitespace-normal py-2 text-center" : undefined}
+        disabled={!userId || isMutating || disableForRestriction}
+        onClick={() =>
+          isEnrolled
+            ? setClassToCancel(gymClass)
+            : isWaitlisted
+            ? leaveWaitlistMutation.mutate(gymClass.id)
+            : joinWaitlistMutation.mutate(gymClass.id)
+        }
+      >
+        {isEnrolled
+          ? "Cancelar inscripcion"
+          : isWaitlisted
+          ? "Salir de lista de espera"
+          : isRestrictionActive
+          ? restrictionRemainingMs > 0
+            ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+            : "Restringido"
+          : "Sumarme a lista de espera"}
+      </Button>
+    );
+  };
+
   const fullColumns: ColumnDef<GymClass>[] = [
     ...columns.slice(0, 3),
     {
       id: "actions",
       header: "Accion",
       cell: ({ row }) => {
-        const isEnrolled = userId ? row.original.users.includes(userId) : false;
-        const isWaitlisted = waitlistedClassIds.has(row.original.id);
-        const isMutating =
-          joinWaitlistMutation.isPending ||
-          leaveWaitlistMutation.isPending ||
-          cancelEnrollmentMutation.isPending;
-        const isJoinWaitlistAction = !isEnrolled && !isWaitlisted;
-        const disableForRestriction = isJoinWaitlistAction && isRestrictionActive;
-
-        return (
-          <Button
-            size="sm"
-            variant={isEnrolled ? "destructive" : "outline"}
-            disabled={!userId || isMutating || disableForRestriction}
-            onClick={() =>
-              isEnrolled
-                ? setClassToCancel(row.original)
-                : isWaitlisted
-                ? leaveWaitlistMutation.mutate(row.original.id)
-                : joinWaitlistMutation.mutate(row.original.id)
-            }
-          >
-            {isEnrolled
-              ? "Cancelar inscripcion"
-              : isWaitlisted
-              ? "Salir de lista de espera"
-              : isRestrictionActive
-              ? restrictionRemainingMs > 0
-                ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
-                : "Restringido"
-              : "Sumarme a lista de espera"}
-          </Button>
-        );
+        return renderActionButton(row.original);
       },
     },
   ];
@@ -293,11 +307,56 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-lg font-bold">Clases Completas</h1>
       </div>
-      <DataTable
-        columns={fullColumns}
-        data={fullClasses || []}
-        headerClassName="last:items-center last:justify-end last:w-min"
-      />
+      <div className="hidden sm:block">
+        <DataTable
+          columns={fullColumns}
+          data={sortedFullClasses}
+          headerClassName="last:items-center last:justify-end last:w-min"
+        />
+      </div>
+      <div className="sm:hidden space-y-3">
+        {sortedFullClasses.length === 0 ? (
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-center text-gray-500 dark:text-gray-400">
+                No hay clases completas.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          sortedFullClasses.map((gymClass) => (
+            <Card key={gymClass.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{gymClass.name}</CardTitle>
+                <div className="pt-1">{renderActionButton(gymClass, true)}</div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-gray-500 dark:text-gray-400">Fecha</div>
+                  <div className="text-right text-gray-900 dark:text-gray-100">
+                    {gymClass.date
+                      ? new Date(gymClass.date).toLocaleDateString("es-ES", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                      : "-"}
+                  </div>
+                  <div className="text-gray-500 dark:text-gray-400">Hora</div>
+                  <div className="text-right text-gray-900 dark:text-gray-100">
+                    {gymClass.time ?? "-"}
+                  </div>
+                  <div className="text-gray-500 dark:text-gray-400">Inscriptos</div>
+                  <div className="text-right text-gray-900 dark:text-gray-100">
+                    {typeof gymClass.enrolled === "number" ? gymClass.enrolled : "-"} /{" "}
+                    {typeof gymClass.capacity === "number" ? gymClass.capacity : "-"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </>
   );
 };
