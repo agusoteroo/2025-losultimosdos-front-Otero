@@ -16,6 +16,7 @@ import {
 } from "../ui/dialog";
 import { useEnrollClass } from "@/hooks/use-class-mutations";
 import { formatRemainingMmSs } from "@/lib/no-show-policy-utils";
+import { getArgentinaNowParts } from "@/lib/argentina-time";
 
 interface AvailableClassesModalProps {
   user: User;
@@ -115,28 +116,18 @@ const getTimeMinutes = (time?: string | null) => {
   return hours * 60 + minutes;
 };
 
-const getNowDateOnly = () => {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
 const isUpcomingClass = (gymClass: GymClass) => {
   const classDateOnly = getDateOnly(gymClass.date as string | Date);
   if (!classDateOnly) return false;
 
-  const today = getNowDateOnly();
-  if (classDateOnly > today) return true;
-  if (classDateOnly < today) return false;
+  const argentinaNow = getArgentinaNowParts();
+  if (classDateOnly > argentinaNow.dateOnly) return true;
+  if (classDateOnly < argentinaNow.dateOnly) return false;
 
   const classMinutes = getTimeMinutes(gymClass.time);
   if (classMinutes === null) return true;
 
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  return classMinutes >= nowMinutes;
+  return classMinutes >= argentinaNow.totalMinutes;
 };
 
 const getClassDateTimeMs = (gymClass: GymClass) => {
