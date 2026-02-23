@@ -34,10 +34,7 @@ const classFormSchema = z.object({
     .string()
     .min(10, "La descripcion debe tener al menos 10 caracteres"),
   date: z
-    .date({
-      required_error: "Selecciona una fecha",
-      invalid_type_error: "Selecciona una fecha valida",
-    })
+    .date()
     .refine((date) => {
       const selectedDateOnly = getLocalDateOnly(date);
       const argentinaNow = getArgentinaNowParts();
