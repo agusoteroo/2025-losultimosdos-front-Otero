@@ -39,7 +39,7 @@ export interface ClassBooking {
 }
 
 export interface AdminBookingStrikeAlert {
-  type: "ABSENT_STRIKE";
+  type: "ABSENT_STRIKE" | "LATE_CANCELLATION_STRIKE";
   userId: string;
   strikes: number;
   threshold: number;

@@ -8,11 +8,17 @@ interface ValidationDetail {
 export class ApiValidationError extends Error {
   public details: ValidationDetail[];
   public status?: number;
+  public payload?: Record<string, any>;
 
-  constructor(details: ValidationDetail[], status?: number) {
+  constructor(
+    details: ValidationDetail[],
+    status?: number,
+    payload?: Record<string, any>
+  ) {
     super("Validation failed " + status);
     this.details = details;
     this.status = status;
+    this.payload = payload;
   }
 }
 
@@ -52,9 +58,9 @@ export class ApiService {
       console.log(response.body, response.status);
       throw new Error("Server error");
     } else if (response.status >= 400) {
-      const { error, details } = await response.json();
-
-      throw new ApiValidationError(details, response.status);
+      const payload = await response.json();
+      const { details } = payload;
+      throw new ApiValidationError(details, response.status, payload);
     }
     const data = await response.json();
     return data;
@@ -71,13 +77,15 @@ export class ApiService {
     const response = await fetch(`${this.baseUrl}${normalizedEndpoint}`, {
       method: "GET",
       headers,
+      cache: "no-store",
     });
     if (response.status >= 500) {
       console.log(response.body, response.status);
       throw new Error("Server error");
     } else if (response.status >= 400) {
-      const { error, details } = await response.json();
-      throw new ApiValidationError(details, response.status);
+      const payload = await response.json();
+      const { details } = payload;
+      throw new ApiValidationError(details, response.status, payload);
     }
     const data = await response.json();
     return data;
@@ -106,9 +114,10 @@ export class ApiService {
       console.log(response.body, response.status);
       throw new Error("Server error");
     } else if (response.status >= 400) {
-      const { error, details } = await response.json();
+      const payload = await response.json();
+      const { error, details } = payload;
       console.log("error", error, details);
-      throw new ApiValidationError(details, response.status);
+      throw new ApiValidationError(details, response.status, payload);
     }
     const data = await response.json();
     return data;
@@ -129,8 +138,9 @@ export class ApiService {
       console.log(response.body, response.status);
       throw new Error("Server error");
     } else if (response.status >= 400) {
-      const { error, details, message } = await response.json();
-      throw new ApiValidationError(details, response.status);
+      const payload = await response.json();
+      const { details } = payload;
+      throw new ApiValidationError(details, response.status, payload);
     }
     return response;
   }
