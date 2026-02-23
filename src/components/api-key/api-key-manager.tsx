@@ -131,7 +131,7 @@ export const ApiKeyManager = () => {
   };
 
   const handleCopyKey = async () => {
-    if (!apiKey) return;
+    if (!apiKey?.key) return;
 
     try {
       await navigator.clipboard.writeText(apiKey.key);
@@ -227,7 +227,11 @@ export const ApiKeyManager = () => {
               <div className="flex gap-2">
                 <Input
                   id="api-key"
-                  value={showKey ? apiKey.key : maskApiKey(apiKey.key)}
+                  value={
+                    showKey
+                      ? apiKey.key ?? ""
+                      : maskApiKey(apiKey.key ?? apiKey.keyLastFour ?? "••••••••")
+                  }
                   readOnly
                   className="font-mono"
                 />
@@ -339,7 +343,7 @@ export const ApiKeyManager = () => {
                 >
                   {`curl -X GET https://api.gymcloud.com/v1/data \\
   -H "Authorization: Bearer ${
-    apiKey ? (showKey ? apiKey.key : "TU_API_KEY") : "TU_API_KEY"
+    apiKey?.key && showKey ? apiKey.key : "TU_API_KEY"
   }"`}
                 </SyntaxHighlighter>
               </div>
@@ -363,7 +367,7 @@ export const ApiKeyManager = () => {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer ${
-      apiKey ? (showKey ? apiKey.key : "TU_API_KEY") : "TU_API_KEY"
+      apiKey?.key && showKey ? apiKey.key : "TU_API_KEY"
     }',
     'Content-Type': 'application/json'
   }
@@ -395,10 +399,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 String apiKey = "${
-                    apiKey
-                      ? showKey
-                        ? apiKey.key
-                        : "TU_API_KEY"
+                    apiKey?.key && showKey
+                      ? apiKey.key
                       : "TU_API_KEY"
                   }";
 String url = "https://api.gymcloud.com/v1/data";

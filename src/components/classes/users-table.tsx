@@ -2,18 +2,20 @@
 
 import { DataTable } from "../ui/data-table";
 import { Row, type ColumnDef } from "@tanstack/react-table";
-import { type GymClass } from "@/types";
+import { type GymClass, type UnenrollResponse } from "@/types";
 import { columns } from "./columns";
 import { Button } from "../ui/button";
 import { ClerkLoaded, ClerkLoading, useAuth } from "@clerk/nextjs";
-import apiService from "@/services/api.service";
+import apiService, { ApiValidationError } from "@/services/api.service";
 import { toast } from "react-hot-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "../ui/skeleton";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "@/store/useStore";
 import { useEvaluateChallenges } from "@/hooks/use-evaluate-challenge";
+import { ClassCancelConfirmDialog } from "@/components/classes/class-cancel-confirm-dialog";
+import bookingService from "@/services/booking.service";
 import {
   Card,
   CardHeader,
@@ -22,6 +24,13 @@ import {
   CardAction,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { showWaitlistPromotionToast } from "@/lib/waitlist-promotion-toast";
+import { showStrikeAlertToast } from "@/lib/strike-alert-toast";
+import {
+  formatRemainingMmSs,
+  getRestrictionRemainingMs,
+  isNoShowRestricted,
+} from "@/lib/no-show-policy-utils";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +42,14 @@ import {
 
 const MEDICAL_EXAM_URL =
   "https://medi-book-web.onrender.com/patient/reservation-turns";
+
+const getApiErrorMessage = (error: unknown) => {
+  if (error instanceof ApiValidationError && error.details?.length) {
+    return error.details[0]?.message ?? null;
+  }
+
+  return null;
+};
 
 const UsersActionColumn = ({
   row,
@@ -46,9 +63,39 @@ const UsersActionColumn = ({
   const [isLoading, setIsLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
+  const [showCancelAlert, setShowCancelAlert] = useState(false);
   const queryClient = useQueryClient();
   const { selectedSede } = useStore();
   const { mutate: evaluateChallenges } = useEvaluateChallenges();
+  const { data: policy } = useQuery({
+    queryKey: ["noShowPolicy"],
+    queryFn: () => bookingService.getNoShowPolicy(),
+    enabled: !!userId,
+    refetchOnWindowFocus: true,
+  });
+  const [restrictionNow, setRestrictionNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!isNoShowRestricted(policy) || !policy?.currentWindow?.restrictionUntil) {
+      return;
+    }
+    const interval = window.setInterval(() => setRestrictionNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [policy]);
+
+  const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
+  const isRestrictionActive = isNoShowRestricted(policy);
+  const enrollButtonLabel = useMemo(() => {
+    if (enrolled) {
+      return isLoading ? "Cancelando..." : "Cancelar inscripciÃ³n";
+    }
+    if (isRestrictionActive) {
+      return restrictionRemainingMs > 0
+        ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+        : "Restringido";
+    }
+    return isLoading ? "Inscribiendo..." : "Inscribirse";
+  }, [enrolled, isLoading, isRestrictionActive, restrictionRemainingMs]);
 
   useEffect(() => {
     if (userId) {
@@ -79,6 +126,10 @@ const UsersActionColumn = ({
             }`,
         { id: "enroll-class" }
       );
+      if (enrolled) {
+        showWaitlistPromotionToast((response as UnenrollResponse)?.waitlistPromotion);
+        showStrikeAlertToast((response as UnenrollResponse)?.strikeAlert);
+      }
 
       onClassesChanged?.();
 
@@ -107,7 +158,13 @@ const UsersActionColumn = ({
 
       router.refresh();
     } catch (error: any) {
+      const backendMessage = getApiErrorMessage(error);
+      if (backendMessage && error?.status !== 421) {
+        toast.error(backendMessage, { id: "enroll-class" });
+        return;
+      }
       if (error?.status === 403) {
+        queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
         toast.error("Con el plan básico solo puedes inscribirte en 3 clases", {
           id: "enroll-class",
         });
@@ -130,6 +187,21 @@ const UsersActionColumn = ({
 
   return (
     <>
+      <ClassCancelConfirmDialog
+        open={showCancelAlert}
+        onOpenChange={setShowCancelAlert}
+        className={`"${row.original.name}"`}
+        classDateLabel={
+          row.original.date
+            ? new Date(row.original.date).toLocaleDateString("es-AR")
+            : undefined
+        }
+        classTime={row.original.time}
+        isPending={isLoading}
+        onConfirm={() => {
+          handleEnroll(row.original.id).finally(() => setShowCancelAlert(false));
+        }}
+      />
       <Dialog open={showMedicalModal} onOpenChange={setShowMedicalModal}>
         <DialogContent>
           <DialogHeader>
@@ -164,7 +236,7 @@ const UsersActionColumn = ({
           {enrolled ? (
             <Button
               variant="destructive"
-              onClick={() => handleEnroll(row.original.id)}
+              onClick={() => setShowCancelAlert(true)}
               disabled={isLoading}
               className="w-[150px]"
             >
@@ -174,10 +246,10 @@ const UsersActionColumn = ({
             <Button
               variant="default"
               onClick={() => handleEnroll(row.original.id)}
-              disabled={isLoading}
+              disabled={isLoading || isRestrictionActive}
               className="w-[150px]"
             >
-              {isLoading ? "Inscribiendo..." : "Inscribirse"}
+              {enrollButtonLabel}
             </Button>
           )}
         </ClerkLoaded>
@@ -197,9 +269,39 @@ const MobileActionButton = ({
   const [isLoading, setIsLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
+  const [showCancelAlert, setShowCancelAlert] = useState(false);
   const queryClient = useQueryClient();
   const { selectedSede } = useStore();
   const { mutate: evaluateChallenges } = useEvaluateChallenges();
+  const { data: policy } = useQuery({
+    queryKey: ["noShowPolicy"],
+    queryFn: () => bookingService.getNoShowPolicy(),
+    enabled: !!userId,
+    refetchOnWindowFocus: true,
+  });
+  const [restrictionNow, setRestrictionNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!isNoShowRestricted(policy) || !policy?.currentWindow?.restrictionUntil) {
+      return;
+    }
+    const interval = window.setInterval(() => setRestrictionNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [policy]);
+
+  const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
+  const isRestrictionActive = isNoShowRestricted(policy);
+  const enrollButtonLabel = useMemo(() => {
+    if (enrolled) {
+      return isLoading ? "Cancelando..." : "Cancelar inscripciÃ³n";
+    }
+    if (isRestrictionActive) {
+      return restrictionRemainingMs > 0
+        ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+        : "Restringido";
+    }
+    return isLoading ? "Inscribiendo..." : "Inscribirse";
+  }, [enrolled, isLoading, isRestrictionActive, restrictionRemainingMs]);
 
   useEffect(() => {
     if (userId) {
@@ -210,9 +312,12 @@ const MobileActionButton = ({
   const handleEnroll = async (classId: number) => {
     try {
       setIsLoading(true);
-      await apiService.post(enrolled ? "/user/unenroll" : "/user/enroll", {
+      const response = await apiService.post(
+        enrolled ? "/user/unenroll" : "/user/enroll",
+        {
         classId,
-      });
+        }
+      );
 
       const wasEnrolled = enrolled;
       setEnrolled(!enrolled);
@@ -223,6 +328,10 @@ const MobileActionButton = ({
           : "Inscripción realizada con éxito",
         { id: "enroll-class" }
       );
+      if (enrolled) {
+        showWaitlistPromotionToast((response as UnenrollResponse)?.waitlistPromotion);
+        showStrikeAlertToast((response as UnenrollResponse)?.strikeAlert);
+      }
 
       onClassesChanged?.();
 
@@ -251,7 +360,13 @@ const MobileActionButton = ({
 
       router.refresh();
     } catch (error: any) {
+      const backendMessage = getApiErrorMessage(error);
+      if (backendMessage && error?.status !== 421) {
+        toast.error(backendMessage, { id: "enroll-class" });
+        return;
+      }
       if (error?.status === 403) {
+        queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
         toast.error("Con el plan básico solo puedes inscribirte en 3 clases", {
           id: "enroll-class",
         });
@@ -274,6 +389,19 @@ const MobileActionButton = ({
 
   return (
     <>
+      <ClassCancelConfirmDialog
+        open={showCancelAlert}
+        onOpenChange={setShowCancelAlert}
+        className={`"${gymClass.name}"`}
+        classDateLabel={
+          gymClass.date ? new Date(gymClass.date).toLocaleDateString("es-AR") : undefined
+        }
+        classTime={gymClass.time}
+        isPending={isLoading}
+        onConfirm={() => {
+          handleEnroll(gymClass.id).finally(() => setShowCancelAlert(false));
+        }}
+      />
       <Dialog open={showMedicalModal} onOpenChange={setShowMedicalModal}>
         <DialogContent>
           <DialogHeader>
@@ -309,7 +437,7 @@ const MobileActionButton = ({
             <Button
               size="sm"
               variant="destructive"
-              onClick={() => handleEnroll(gymClass.id)}
+              onClick={() => setShowCancelAlert(true)}
               disabled={isLoading}
               className="w-full"
             >
@@ -320,10 +448,10 @@ const MobileActionButton = ({
               size="sm"
               variant="default"
               onClick={() => handleEnroll(gymClass.id)}
-              disabled={isLoading}
+              disabled={isLoading || isRestrictionActive}
               className="w-full"
             >
-              {isLoading ? "Inscribiendo..." : "Inscribirse"}
+              {enrollButtonLabel}
             </Button>
           )}
         </ClerkLoaded>

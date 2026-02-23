@@ -12,6 +12,78 @@ export interface GymClass {
   isBoostedForPoints: boolean;
 
 }
+export type BookingStatus =
+  | "RESERVED"
+  | "ATTENDED"
+  | "ABSENT"
+  | "CANCELLED"
+  | "WAITLIST";
+
+export interface ClassBooking {
+  id: number;
+  classId: number;
+  userId: string;
+  status: BookingStatus;
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+    email?: string | null;
+  };
+  waitlistPosition?: number | null;
+  checkedInAt?: string | null;
+  cancelledAt?: string | null;
+  noShowCountMonth?: number;
+  class: GymClass;
+}
+
+export interface AdminBookingStrikeAlert {
+  type: "ABSENT_STRIKE";
+  userId: string;
+  strikes: number;
+  threshold: number;
+  isRestricted: boolean;
+  restrictionUntil: string | null;
+}
+
+export interface AdminBookingStatusUpdateResponse {
+  message: string;
+  booking: ClassBooking;
+  strikeAlert?: AdminBookingStrikeAlert | null;
+}
+
+export interface NoShowPolicy {
+  monthlyNoShows: number;
+  monthlyThreshold: number;
+  isRestricted: boolean;
+  currentWindow?: {
+    minutes?: number;
+    noShows?: number;
+    threshold?: number;
+    restricted?: boolean;
+    restrictionUntil?: string | null;
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+export interface WaitlistPromotionInfo {
+  promoted: boolean;
+  userId: string;
+  classId: number;
+  pointsGranted: boolean;
+  pointsAwarded: number;
+  reason?: "existing_event" | "points_error";
+}
+
+export interface UnenrollResponse {
+  message?: string;
+  class?: GymClass;
+  waitlistPromotion?: WaitlistPromotionInfo | null;
+  strikeAlert?: AdminBookingStrikeAlert | null;
+  pointsAwarded?: number;
+}
 
 export interface User {
   id: string;
@@ -27,7 +99,9 @@ export interface User {
 
 export interface ApiKey {
   id: string;
-  key: string;
+  key?: string;
+  keyPreview?: string;
+  keyLastFour?: string;
   isActive: boolean;
   createdAt: string;
   lastUsed?: string;

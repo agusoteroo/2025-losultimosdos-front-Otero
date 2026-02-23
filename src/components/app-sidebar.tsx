@@ -24,7 +24,7 @@ import {
 
 import { currentUser } from "@clerk/nextjs/server";
 import { Skeleton } from "./ui/skeleton";
-import { SedesSwitcher } from "./sedes-switcher";
+import { SedesSwitcherSlot } from "./sedes-switcher-slot";
 
 export async function AppSidebar({
   ...props
@@ -130,7 +130,7 @@ export async function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
 
-          <SedesSwitcher isAdmin={user?.publicMetadata.role === "admin"} />
+          <SedesSwitcherSlot isAdmin={user?.publicMetadata.role === "admin"} />
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>

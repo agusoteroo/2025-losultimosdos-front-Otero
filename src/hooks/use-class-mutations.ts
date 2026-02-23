@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GymClass } from "@/types";
+import { GymClass, UnenrollResponse } from "@/types";
 import apiService from "@/services/api.service";
 import { toast } from "react-hot-toast";
 import { useStore } from "@/store/useStore";
+import { showWaitlistPromotionToast } from "@/lib/waitlist-promotion-toast";
 
 interface MutationContext {
   prevUserClasses?: GymClass[];
@@ -85,13 +86,13 @@ export const useEnrollClass = (userId: string, onSuccess?: () => void) => {
 export const useUnenrollClass = (userId: string) => {
   const queryClient = useQueryClient();
   const { selectedSede } = useStore();
-  return useMutation<GymClass, Error, GymClass, MutationContext>({
+  return useMutation<UnenrollResponse, Error, GymClass, MutationContext>({
     mutationFn: async (classItem: GymClass) => {
-      const response = await apiService.post(
+      const response = await apiService.post<UnenrollResponse>(
         `/admin/class/${classItem.id}/unenroll`,
         { userId }
       );
-      return response.class as GymClass;
+      return response;
     },
 
     onMutate: async (classItem) => {
@@ -124,10 +125,11 @@ export const useUnenrollClass = (userId: string) => {
       return { prevUserClasses, prevClasses };
     },
 
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast.success("Clase desasignada correctamente", {
         id: "unenroll-class",
       });
+      showWaitlistPromotionToast(response?.waitlistPromotion);
     },
 
     onError: (err, classItem, context) => {

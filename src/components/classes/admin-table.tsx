@@ -199,7 +199,11 @@ const AdminTable = ({ classes }: AdminTableProps) => {
       {/* Sheet para editar */}
       <SheetContent
         side={isMobile ? "bottom" : "right"}
-        className={isMobile ? "h-[90vh] w-full p-4" : "sm:w-[540px]"}
+        className={
+          isMobile
+            ? "h-[90vh] w-full p-4 overflow-y-auto"
+            : "sm:w-[540px] max-w-[95vw] overflow-y-auto"
+        }
       >
         <SheetHeader>
           <SheetTitle className="text-2xl font-bold">Editar Clase</SheetTitle>

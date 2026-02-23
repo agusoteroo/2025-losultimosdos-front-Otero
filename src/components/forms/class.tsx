@@ -116,8 +116,8 @@ export const ClassForm = ({
   };
 
   return (
-    <div className="container mx-auto py-2 px-4">
-      <Card className="max-w-2xl mx-auto p-6">
+    <div className="mx-auto py-2 px-2 sm:px-4">
+      <Card className="w-full max-w-2xl mx-auto p-4 sm:p-6">
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
@@ -172,7 +172,7 @@ export const ClassForm = ({
             />
 
             {/* Fecha y hora */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Fecha */}
               <FormField
                 control={form.control}
