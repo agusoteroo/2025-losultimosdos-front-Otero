@@ -38,8 +38,8 @@ const classFormSchema = z.object({
     .refine((date) => {
       const selectedDateOnly = getLocalDateOnly(date);
       const argentinaNow = getArgentinaNowParts();
-      return selectedDateOnly >= argentinaNow.dateOnly;
-    }, "La fecha tiene que ser hoy o en el futuro"),
+      return selectedDateOnly > argentinaNow.dateOnly;
+    }, "La fecha debe ser a partir de mañana"),
   time: z.string().refine(
     (time) => {
       const match = time.match(/^(\d{1,2}):(\d{2})$/);
@@ -68,26 +68,6 @@ const classFormSchema = z.object({
   users: z.array(z.string()),
   sedeId: z.number(),
   isBoostedForPoints: z.boolean(),
-}).superRefine((values, ctx) => {
-  const timeMatch = values.time.match(/^(\d{1,2}):(\d{2})$/);
-  if (!timeMatch) return;
-
-  const argentinaNow = getArgentinaNowParts();
-  const selected = new Date(values.date);
-  const isToday = getLocalDateOnly(selected) === argentinaNow.dateOnly;
-
-  if (!isToday) return;
-
-  const selectedMinutes = Number(timeMatch[1]) * 60 + Number(timeMatch[2]);
-  const nowMinutes = argentinaNow.totalMinutes;
-
-  if (selectedMinutes < nowMinutes) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["time"],
-      message: "Para hoy, la hora no puede ser anterior a la actual",
-    });
-  }
 });
 
 export type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -107,6 +87,9 @@ export const ClassForm = ({
   const [isLoading, setIsLoading] = useState(false);
   const { selectedSede } = useStore();
   const queryClient = useQueryClient();
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
   const form = useForm<ClassFormValues>({
     resolver: zodResolver(classFormSchema),
@@ -217,6 +200,7 @@ export const ClassForm = ({
                       <DatePicker
                         date={field.value}
                         onDateChange={field.onChange}
+                        minDate={tomorrow}
                         className="w-full"
                         placeholder="Fecha"
                       />
