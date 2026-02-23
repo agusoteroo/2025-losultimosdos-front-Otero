@@ -38,6 +38,21 @@ export interface ClassBooking {
   class: GymClass;
 }
 
+export interface AdminBookingStrikeAlert {
+  type: "ABSENT_STRIKE";
+  userId: string;
+  strikes: number;
+  threshold: number;
+  isRestricted: boolean;
+  restrictionUntil: string | null;
+}
+
+export interface AdminBookingStatusUpdateResponse {
+  message: string;
+  booking: ClassBooking;
+  strikeAlert?: AdminBookingStrikeAlert | null;
+}
+
 export interface NoShowPolicy {
   monthlyNoShows: number;
   monthlyThreshold: number;
@@ -66,6 +81,7 @@ export interface UnenrollResponse {
   message?: string;
   class?: GymClass;
   waitlistPromotion?: WaitlistPromotionInfo | null;
+  strikeAlert?: AdminBookingStrikeAlert | null;
   pointsAwarded?: number;
 }
 
@@ -83,7 +99,9 @@ export interface User {
 
 export interface ApiKey {
   id: string;
-  key: string;
+  key?: string;
+  keyPreview?: string;
+  keyLastFour?: string;
   isActive: boolean;
   createdAt: string;
   lastUsed?: string;

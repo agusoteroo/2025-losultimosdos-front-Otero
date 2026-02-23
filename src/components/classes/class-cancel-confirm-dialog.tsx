@@ -36,6 +36,7 @@ export const ClassCancelConfirmDialog = ({
   const { data: policy } = useQuery({
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
+    refetchOnWindowFocus: true,
   });
 
   const noShowCount = policy?.currentWindow?.noShows ?? policy?.monthlyNoShows ?? 0;
@@ -78,4 +79,3 @@ export const ClassCancelConfirmDialog = ({
     </AlertDialog>
   );
 };
-

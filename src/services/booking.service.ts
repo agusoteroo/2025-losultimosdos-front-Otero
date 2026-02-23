@@ -1,5 +1,10 @@
 import apiService from "./api.service";
-import { ClassBooking, BookingStatus, NoShowPolicy } from "@/types";
+import {
+  AdminBookingStatusUpdateResponse,
+  ClassBooking,
+  BookingStatus,
+  NoShowPolicy,
+} from "@/types";
 
 class BookingService {
   async getMyBookings(sedeId: number): Promise<ClassBooking[]> {
@@ -44,9 +49,15 @@ class BookingService {
     return (data.bookings ?? data.items ?? []) as ClassBooking[];
   }
 
-  async updateStatus(bookingId: number, status: BookingStatus): Promise<ClassBooking> {
-    const data = await apiService.put(`/admin/bookings/${bookingId}/status`, { status });
-    return data.booking as ClassBooking;
+  async updateStatus(
+    bookingId: number,
+    status: BookingStatus
+  ): Promise<AdminBookingStatusUpdateResponse> {
+    const data = await apiService.put<AdminBookingStatusUpdateResponse>(
+      `/admin/bookings/${bookingId}/status`,
+      { status }
+    );
+    return data;
   }
 
   async getClassBookings(classId: number, status?: BookingStatus): Promise<ClassBooking[]> {

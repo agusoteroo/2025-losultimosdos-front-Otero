@@ -55,9 +55,10 @@ const UserPage = () => {
     },
   });
 
-  const { data: policy } = useQuery({
+  const { data: policy, refetch: refetchNoShowPolicy } = useQuery({
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
@@ -72,7 +73,19 @@ const UserPage = () => {
   const noShowCount = policy?.currentWindow?.noShows ?? policy?.monthlyNoShows;
   const noShowThreshold = policy?.currentWindow?.threshold ?? policy?.monthlyThreshold;
   const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
-  const restrictionActive = isNoShowRestricted(policy) && restrictionRemainingMs > 0;
+  const restrictionActive = isNoShowRestricted(policy);
+
+  useEffect(() => {
+    if (!restrictionActive || restrictionRemainingMs <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void refetchNoShowPolicy();
+    }, restrictionRemainingMs + 150);
+
+    return () => window.clearTimeout(timeout);
+  }, [refetchNoShowPolicy, restrictionActive, restrictionRemainingMs]);
 
   if (isLoading) {
     return <TableSkeleton />;
@@ -137,12 +150,22 @@ const UserPage = () => {
                   <Badge variant={restrictionActive ? "destructive" : "outline"}>
                     {restrictionActive ? "Restringido" : "Sin restriccion activa"}
                   </Badge>
-                  {restrictionActive ? (
+                  {restrictionActive && restrictionRemainingMs > 0 ? (
                     <span className="font-medium text-destructive">
                       {formatRemainingMmSs(restrictionRemainingMs)}
                     </span>
                   ) : null}
                 </div>
+                {restrictionActive && policy?.currentWindow?.restrictionUntil ? (
+                  <p className="text-muted-foreground">
+                    Tenes una restriccion temporal para reservar hasta{" "}
+                    {new Date(policy.currentWindow.restrictionUntil).toLocaleTimeString(
+                      "es-AR",
+                      { hour: "2-digit", minute: "2-digit" }
+                    )}
+                    .
+                  </p>
+                ) : null}
                 {policy?.currentWindow?.minutes ? (
                   <p className="text-muted-foreground">
                     Ventana actual: {policy.currentWindow.minutes} minuto

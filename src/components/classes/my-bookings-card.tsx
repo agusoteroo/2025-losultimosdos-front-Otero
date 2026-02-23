@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClassCancelConfirmDialog } from "@/components/classes/class-cancel-confirm-dialog";
 import { showWaitlistPromotionToast } from "@/lib/waitlist-promotion-toast";
+import { showStrikeAlertToast } from "@/lib/strike-alert-toast";
 import {
   formatRemainingMmSs,
   getRestrictionRemainingMs,
@@ -93,6 +94,7 @@ export const MyBookingsCard = () => {
   const { data: policy } = useQuery({
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
+    refetchOnWindowFocus: true,
   });
 
   const noShowCount = policy?.currentWindow?.noShows ?? policy?.monthlyNoShows;
@@ -117,6 +119,7 @@ export const MyBookingsCard = () => {
     onSuccess: (response) => {
       toast.success("Clase cancelada");
       showWaitlistPromotionToast(response?.waitlistPromotion);
+      showStrikeAlertToast(response?.strikeAlert);
       queryClient.invalidateQueries({ queryKey: ["myBookings", selectedSede.id] });
       queryClient.invalidateQueries({ queryKey: ["classes", selectedSede.id] });
       queryClient.invalidateQueries({ queryKey: ["myWaitlists", selectedSede.id] });
@@ -235,8 +238,12 @@ export const MyBookingsCard = () => {
 
         {isNoShowRestricted(policy) ? (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-            Superaste el limite de no-shows ({noShowCount}/{noShowThreshold}). Tus
-            nuevas reservas pueden estar restringidas.
+            Tenes una restriccion temporal para reservar clases o entrar a lista de espera.
+            {typeof noShowCount === "number" && typeof noShowThreshold === "number" ? (
+              <div className="mt-1">
+                Strikes actuales: {noShowCount}/{noShowThreshold}
+              </div>
+            ) : null}
             {showRestrictionCountdown ? (
               <div className="mt-1 font-medium">
                 Restriccion activa por {formatRemainingMmSs(restrictionRemainingMs)}.

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { showWaitlistPromotionToast } from "@/lib/waitlist-promotion-toast";
+import { showStrikeAlertToast } from "@/lib/strike-alert-toast";
 import {
   formatRemainingMmSs,
   getRestrictionRemainingMs,
@@ -70,6 +71,7 @@ const UsersActionColumn = ({
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
     enabled: !!userId,
+    refetchOnWindowFocus: true,
   });
   const [restrictionNow, setRestrictionNow] = useState(Date.now());
 
@@ -82,13 +84,15 @@ const UsersActionColumn = ({
   }, [policy]);
 
   const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
-  const isRestrictionActive = isNoShowRestricted(policy) && restrictionRemainingMs > 0;
+  const isRestrictionActive = isNoShowRestricted(policy);
   const enrollButtonLabel = useMemo(() => {
     if (enrolled) {
       return isLoading ? "Cancelando..." : "Cancelar inscripciÃ³n";
     }
     if (isRestrictionActive) {
-      return `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`;
+      return restrictionRemainingMs > 0
+        ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+        : "Restringido";
     }
     return isLoading ? "Inscribiendo..." : "Inscribirse";
   }, [enrolled, isLoading, isRestrictionActive, restrictionRemainingMs]);
@@ -124,6 +128,7 @@ const UsersActionColumn = ({
       );
       if (enrolled) {
         showWaitlistPromotionToast((response as UnenrollResponse)?.waitlistPromotion);
+        showStrikeAlertToast((response as UnenrollResponse)?.strikeAlert);
       }
 
       onClassesChanged?.();
@@ -159,6 +164,7 @@ const UsersActionColumn = ({
         return;
       }
       if (error?.status === 403) {
+        queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
         toast.error("Con el plan básico solo puedes inscribirte en 3 clases", {
           id: "enroll-class",
         });
@@ -271,6 +277,7 @@ const MobileActionButton = ({
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
     enabled: !!userId,
+    refetchOnWindowFocus: true,
   });
   const [restrictionNow, setRestrictionNow] = useState(Date.now());
 
@@ -283,13 +290,15 @@ const MobileActionButton = ({
   }, [policy]);
 
   const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
-  const isRestrictionActive = isNoShowRestricted(policy) && restrictionRemainingMs > 0;
+  const isRestrictionActive = isNoShowRestricted(policy);
   const enrollButtonLabel = useMemo(() => {
     if (enrolled) {
       return isLoading ? "Cancelando..." : "Cancelar inscripciÃ³n";
     }
     if (isRestrictionActive) {
-      return `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`;
+      return restrictionRemainingMs > 0
+        ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+        : "Restringido";
     }
     return isLoading ? "Inscribiendo..." : "Inscribirse";
   }, [enrolled, isLoading, isRestrictionActive, restrictionRemainingMs]);
@@ -321,6 +330,7 @@ const MobileActionButton = ({
       );
       if (enrolled) {
         showWaitlistPromotionToast((response as UnenrollResponse)?.waitlistPromotion);
+        showStrikeAlertToast((response as UnenrollResponse)?.strikeAlert);
       }
 
       onClassesChanged?.();
@@ -356,6 +366,7 @@ const MobileActionButton = ({
         return;
       }
       if (error?.status === 403) {
+        queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
         toast.error("Con el plan básico solo puedes inscribirte en 3 clases", {
           id: "enroll-class",
         });

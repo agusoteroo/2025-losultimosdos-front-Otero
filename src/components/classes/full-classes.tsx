@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { ClassCancelConfirmDialog } from "@/components/classes/class-cancel-confirm-dialog";
 import { useEvaluateChallenges } from "@/hooks/use-evaluate-challenge";
 import { showWaitlistPromotionToast } from "@/lib/waitlist-promotion-toast";
+import { showStrikeAlertToast } from "@/lib/strike-alert-toast";
 import {
   addTrackedWaitlistClass,
   removeTrackedWaitlistClass,
@@ -63,6 +64,7 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
     queryKey: ["noShowPolicy"],
     queryFn: () => bookingService.getNoShowPolicy(),
     enabled: !!userId,
+    refetchOnWindowFocus: true,
   });
   const [restrictionNow, setRestrictionNow] = useState(Date.now());
 
@@ -75,7 +77,7 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
   }, [policy]);
 
   const restrictionRemainingMs = getRestrictionRemainingMs(policy, restrictionNow);
-  const isRestrictionActive = isNoShowRestricted(policy) && restrictionRemainingMs > 0;
+  const isRestrictionActive = isNoShowRestricted(policy);
 
   const waitlistedClassIds = useMemo(() => {
     const ids = new Set<number>();
@@ -173,7 +175,12 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
       queryClient.invalidateQueries({ queryKey: ["classes", selectedSede.id] });
       queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
     },
-    onError: (error) => toast.error(getErrorMessage(error)),
+    onError: (error: any) => {
+      if (error?.status === 403) {
+        queryClient.invalidateQueries({ queryKey: ["noShowPolicy"] });
+      }
+      toast.error(getErrorMessage(error));
+    },
   });
 
   const leaveWaitlistMutation = useMutation({
@@ -197,6 +204,7 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
     onSuccess: (response) => {
       toast.success("Clase cancelada");
       showWaitlistPromotionToast(response?.waitlistPromotion);
+      showStrikeAlertToast(response?.strikeAlert);
       if (classToCancel) {
         removeTrackedWaitlistClass(userId, selectedSede.id, classToCancel.id);
       }
@@ -254,7 +262,9 @@ export const FullClasses = ({ fullClasses }: { fullClasses: GymClass[] }) => {
               : isWaitlisted
               ? "Salir de lista de espera"
               : isRestrictionActive
-              ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+              ? restrictionRemainingMs > 0
+                ? `Restringido (${formatRemainingMmSs(restrictionRemainingMs)})`
+                : "Restringido"
               : "Sumarme a lista de espera"}
           </Button>
         );

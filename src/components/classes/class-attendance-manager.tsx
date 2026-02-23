@@ -6,7 +6,12 @@ import { toast } from "react-hot-toast";
 
 import bookingService from "@/services/booking.service";
 import { ApiValidationError } from "@/services/api.service";
-import { BookingStatus, ClassBooking, GymClass } from "@/types";
+import {
+  AdminBookingStatusUpdateResponse,
+  BookingStatus,
+  ClassBooking,
+  GymClass,
+} from "@/types";
 import { useStore } from "@/store/useStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -39,6 +44,29 @@ const getErrorMessage = (error: unknown) => {
   }
 
   return "No pudimos actualizar el estado";
+};
+
+const getStrikeAlertMessage = (
+  strikeAlert: AdminBookingStatusUpdateResponse["strikeAlert"]
+) => {
+  if (!strikeAlert || strikeAlert.type !== "ABSENT_STRIKE") {
+    return null;
+  }
+
+  if (strikeAlert.isRestricted) {
+    const unlockAt = strikeAlert.restrictionUntil
+      ? new Date(strikeAlert.restrictionUntil).toLocaleTimeString("es-AR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
+
+    return unlockAt
+      ? `Se registró la falta y el usuario quedó bloqueado temporalmente para reservar (hasta ${unlockAt}).`
+      : "Se registró la falta y el usuario quedó bloqueado temporalmente para reservar.";
+  }
+
+  return `Se registró la falta. Strikes del usuario: ${strikeAlert.strikes}/${strikeAlert.threshold}.`;
 };
 
 const getUserDisplayName = (booking: ClassBooking) =>
@@ -100,8 +128,14 @@ export const ClassAttendanceManager = ({ classes }: { classes: GymClass[] }) => 
       bookingId: number;
       status: BookingStatus;
     }) => bookingService.updateStatus(bookingId, status),
-    onSuccess: () => {
+    onSuccess: (response, variables) => {
       toast.success("Asistencia actualizada");
+      if (variables.status === "ABSENT") {
+        const strikeMessage = getStrikeAlertMessage(response?.strikeAlert);
+        if (strikeMessage) {
+          toast(strikeMessage, { icon: "⚠️" });
+        }
+      }
       queryClient.invalidateQueries({
         queryKey: ["classBookings", selectedClassId, "RESERVED"],
       });
